@@ -7,7 +7,6 @@
 services:
   eval:
     build: .
-    image: paypilot-l12-eval
     working_dir: /course/solutions/evals
     entrypoint: ["python", "run_eval.py"]
     command: []

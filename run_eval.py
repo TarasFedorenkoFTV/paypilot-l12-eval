@@ -137,7 +137,10 @@ def collect_oracles(stand, case: dict, run: dict) -> dict:
       "state:customers"                — рядок клієнта з context.customer_id
                                          (stand.state("customers"));
       "state:disputes"                 — рядки спорів з context.transaction_id
-                                         (stand.state("disputes"))."""
+                                         (stand.state("disputes")).
+    tool_calls() повертає список {"name", "arguments", "result"}; "result" —
+    уже словник. Якщо агент не викликав інструмент, покладіть None: це теж
+    результат, і спільна перевірка має його прочитати."""
     raise NotImplementedError("КРОК 3: collect_oracles() ще не написано")
 
 
@@ -221,8 +224,9 @@ def unit_tests(dry: bool) -> dict:
 
 
 def _unit_ok(block: dict) -> bool:
-    return all(v.get("exit_code") == 0 for k, v in block.items()
-               if isinstance(v, dict) and "exit_code" in v)
+    """Зелено, лише коли обидва каталоги знайдено і pytest повернув 0."""
+    return all(isinstance(block.get(k), dict) and block[k].get("exit_code") == 0
+               for k in ("manual", "generated"))
 
 
 # ─────────────────────────── 4. result storage ────────────────────────────
@@ -297,6 +301,9 @@ def dry_run(names, gate, only) -> int:
     ut = unit_tests(dry=True)
     print("unit-тести L11: " + ", ".join(
         f"{k} — {v.get('tests', v.get('status'))}" for k, v in ut.items() if k != "l11_dir"))
+    if any(isinstance(v, dict) and v.get("status") == "not found" for v in ut.values()):
+        print("УВАГА: unit-тести L11 не знайдено — прогін поверне код 1. "
+              "Покладіть кіт L11 у ../l11 або задайте L11_DIR у .env")
     print("нічого не викликано")
     return 0
 
