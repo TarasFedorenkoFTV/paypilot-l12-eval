@@ -179,6 +179,8 @@ docker compose run --rm eval --dry-run
 docker compose run --rm eval
 <код повернення>
 docker compose run --rm eval --compare reports/<v1>.json reports/<v4>.json
+docker compose run --rm --entrypoint pytest eval tests -q
+git add reports, git commit, git push   # запис із чистого клону — у репозиторій ДЗ
 ```
 
 | Поле | Значення |
@@ -252,7 +254,7 @@ Alternatives
 
 ## 8. Декларація використання AI і готовність до каскаду
 
-*ДЗ: етап 5.*
+*ДЗ: етап 5 · Критерій 7 «Декларація і готовність».*
 
 **Декларація AI:** де саме я користувався асистентом під час збирання: \<…\> · що з його виводу відхилив і чому: \<…\> · чи торкався асистент файлів поза периметром з розділу 7: так / ні
 
