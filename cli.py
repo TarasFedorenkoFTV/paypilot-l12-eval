@@ -11,7 +11,7 @@ sys.path.insert(0, str(HERE))
 def parse(argv):
     p = argparse.ArgumentParser(
         prog="docker compose run --rm eval",
-        description="Run the L05 set against the PayPilot stand.")
+        description="Run a case set against the PayPilot stand (L03-L09 runner).")
     p.add_argument("--profile", metavar="NAME",
                    help="switch the stand to this profile before the run")
     p.add_argument("--only", metavar="IDS",

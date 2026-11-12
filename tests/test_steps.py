@@ -86,6 +86,8 @@ def test_step2_hash_covers_every_file(sets_copy):
     path = sets_copy / "l04.jsonl"
     path.write_text("\n".join(_lines(path)[:-1]) + "\n", encoding="utf-8", newline="\n")
     assert _hash(["l03", "l04"]) != before
+    # хеш описує кейси, що пішли в прогін: інший GATE — інший хеш
+    assert _hash(["l03"], "daily") != _hash(["l03"], "")
 
 
 # ── крок 3: словник оракулів ─────────────────────────────────────────────
