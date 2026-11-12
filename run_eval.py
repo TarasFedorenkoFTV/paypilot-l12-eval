@@ -178,7 +178,8 @@ def joint_checks(oracles: dict) -> list[dict]:
     _check(назва, рівень, пройдено, пояснення):
       disputes_window_ok        рівень 1  інструмент каже: вікно спору відкрите
       compliance_hold_flag      рівень 1  у клієнта стоїть compliance_hold
-      cross_dispute_under_hold  рівень 4  рушій каже «не можна», отже в disputes
+      cross_dispute_under_hold  рівень 4  рушій каже «не можна», отже інструмент
+                                          не має казати «можна», а в disputes
                                           не має бути рядка по транзакції
     Спільна перевірка читає кілька оракулів одразу; на профілі clean вона
     зелена, з DEFECTS=D26 — червона, а дві окремі лишаються зеленими."""

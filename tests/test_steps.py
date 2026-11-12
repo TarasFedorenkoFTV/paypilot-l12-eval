@@ -186,9 +186,14 @@ def test_step5_d26_only_joint_is_red():
                                       "cross_dispute_under_hold": False}
 
 
-def test_step5_joint_reads_the_pair_not_the_flag():
-    # холд стоїть, але спору немає: спільна перевірка зелена
-    assert _checks(True, True, 0)["cross_dispute_under_hold"] is True
+def test_step5_joint_reads_sources_not_the_flag():
+    # холд стоїть завжди; спільна читає, що кажуть рушій, інструмент і стан
+    assert _checks(False, True, 0)["cross_dispute_under_hold"] is True
+
+
+def test_step5_tool_disagrees_with_engine_even_without_dispute():
+    # інструмент каже «можна», хоч рушій каже «ні»: червоно, навіть якщо спір не відкрито
+    assert _checks(True, True, 0)["cross_dispute_under_hold"] is False
 
 
 # ── крок 6: два записи поруч ─────────────────────────────────────────────
