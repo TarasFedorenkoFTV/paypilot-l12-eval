@@ -242,8 +242,8 @@ def _unit_ok(block: dict) -> bool:
 def prompt_version(stand) -> tuple[str, str]:
     """КРОК 4. Повертає (версія для звіту, мітка стенду).
 
-    Мітку стенд віддає в GET /api/_test/prompt -> "version", але вона завжди
-    base.v1: стенд читає файл base.v1.md, хоч би що в нього змонтували.
+    Мітку стенд віддає в GET /api/_test/prompt -> "version", але без дефектів
+    вона завжди base.v1: стенд читає файл base.v1.md, хоч би що в нього змонтували.
     Яка версія діє насправді, видно в першому рядку "text":
       "# PayPilot — system prompt (base.v4)".
     Якщо список "overlays" не порожній, допишіть його через «+», як стенд.
