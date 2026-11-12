@@ -1,0 +1,32 @@
+# Одна команда контуру:  docker compose run --rm eval
+#   лише порахувати:      docker compose run --rm eval --dry-run
+#   змінні:               docker compose run --rm -e SET=l03 -e GATE=daily eval
+#   два записи поруч:     docker compose run --rm eval --compare reports/A.json reports/B.json
+# Стенд має бути піднятий (http://localhost:8000). Шляхи до стенду й кіта L11 —
+# поруч із цією текою (~/paypilot/paypilot-stand, ~/paypilot/l11) або в .env.
+services:
+  eval:
+    build: .
+    image: paypilot-l12-eval
+    working_dir: /course/solutions/evals
+    entrypoint: ["python", "run_eval.py"]
+    command: []
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SET: ${SET:-all}
+      GATE: ${GATE:-daily}
+      CASE: ${CASE:-}
+      PROFILE: ${PROFILE:-clean}
+      DEFECTS: ${DEFECTS:-}
+      L11_DIR: /course/l11
+      SERVICE_URL: ${EVAL_STAND_URL:-http://host.docker.internal:8000}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/course/solutions/evals
+      - ${STAND_DIR:-../paypilot-stand}/app:/course/app:ro
+      - ${L11_DIR:-../l11}:/course/l11:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway

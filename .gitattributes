@@ -1,0 +1,6 @@
+# Набори й записи прогонів — завжди LF, на будь-якій ОС
+*.jsonl text eol=lf
+*.json  text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+Makefile text eol=lf
