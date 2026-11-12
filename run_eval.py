@@ -136,9 +136,11 @@ def collect_oracles(stand, case: dict, run: dict) -> dict:
                                          (additional_metadata.engine);
       "tool:check_dispute_eligibility" — результат інструмента з трейсу
                                          (stand.tool_calls(run["trace"]));
-      "state:customers"                — рядок клієнта з context.customer_id
+      "state:customers"                — список рядків customers з
+                                         id = context.customer_id (один рядок)
                                          (stand.state("customers"));
-      "state:disputes"                 — рядки спорів з context.transaction_id
+      "state:disputes"                 — список рядків disputes з
+                                         transaction_id = context.transaction_id
                                          (stand.state("disputes")).
     tool_calls() повертає список {"name", "arguments", "result"}; "result" —
     уже словник. Якщо агент викликав інструмент кілька разів, беріть перший
@@ -185,8 +187,9 @@ def joint_checks(oracles: dict) -> list[dict]:
       disputes_window_ok        рівень 1  інструмент каже: вікно спору відкрите
       compliance_hold_flag      рівень 1  у клієнта стоїть compliance_hold
       cross_dispute_under_hold  рівень 4  рушій каже «не можна», отже інструмент
-                                          не має казати «можна», а в disputes
-                                          не має бути рядка по транзакції
+                                          не має казати «можна» І в disputes
+                                          не має бути рядка по транзакції;
+                                          досить будь-якого з двох, щоб FAIL
     Спільна перевірка читає кілька оракулів одразу; на профілі clean вона
     зелена, з DEFECTS=D26 — червона, а дві окремі лишаються зеленими.
     Якщо агент не викликав інструмент (у словнику None), disputes_window_ok —
@@ -243,7 +246,10 @@ def prompt_version(stand) -> tuple[str, str]:
     base.v1: стенд читає файл base.v1.md, хоч би що в нього змонтували.
     Яка версія діє насправді, видно в першому рядку "text":
       "# PayPilot — system prompt (base.v4)".
-    Якщо список "overlays" не порожній, допишіть його через «+», як стенд."""
+    Якщо список "overlays" не порожній, допишіть його через «+», як стенд.
+    Якщо в першому рядку немає «(base.vN)», поверніть "unknown", а не мітку:
+    мітка — саме те поле, що бреше. Дефект D26 живе в інструменті, а не в
+    промпті, тому з DEFECTS=D26 overlays порожній і версія лишається base.v1."""
     p = stand._call("GET", "/api/_test/prompt")
     return p["version"], p["version"]       # КРОК 4: перша половина — неправда
 

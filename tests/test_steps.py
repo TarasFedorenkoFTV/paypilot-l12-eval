@@ -189,8 +189,10 @@ def test_step5_d26_only_joint_is_red():
 
 
 def test_step5_joint_reads_sources_not_the_flag():
-    # холд стоїть завжди; спільна читає, що кажуть рушій, інструмент і стан
+    # спільна читає, що кажуть рушій, інструмент і стан, а не прапорець холду:
+    # холд стоїть, конфлікту немає — pass; холду немає, а конфлікт є — FAIL
     assert _checks(False, True, 0)["cross_dispute_under_hold"] is True
+    assert _checks(True, False, 1)["cross_dispute_under_hold"] is False
 
 
 def test_step5_no_tool_call_means_window_not_checked():
