@@ -309,6 +309,9 @@ def dry_run(names, gate, only) -> int:
     if any(isinstance(v, dict) and v.get("status") == "not found" for v in ut.values()):
         print("УВАГА: unit-тести L11 не знайдено — прогін поверне код 1. "
               "Покладіть кіт L11 у ../l11 або задайте L11_DIR у .env")
+    if not (Path(__file__).resolve().parents[2] / "app" / "engines").is_dir():
+        print("УВАГА: код стенду не знайдено — прогін упаде на першому кейсі. "
+              "Покладіть стенд у ../paypilot-stand або задайте STAND_DIR у .env")
     print("нічого не викликано")
     return 0
 
