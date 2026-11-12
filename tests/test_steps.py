@@ -191,6 +191,14 @@ def test_step5_joint_reads_sources_not_the_flag():
     assert _checks(False, True, 0)["cross_dispute_under_hold"] is True
 
 
+def test_step5_no_tool_call_means_window_not_checked():
+    oracles = run_eval.collect_oracles(FakeStand(True, 0), _joint_case(),
+                                       {"answer": "...", "trace": {"calls": []}})
+    checks = {c["label"]: c["passed"] for c in run_eval.joint_checks(oracles)}
+    assert checks["disputes_window_ok"] is False
+    assert checks["cross_dispute_under_hold"] is True
+
+
 def test_step5_tool_disagrees_with_engine_even_without_dispute():
     # інструмент каже «можна», хоч рушій каже «ні»: червоно, навіть якщо спір не відкрито
     assert _checks(True, True, 0)["cross_dispute_under_hold"] is False
