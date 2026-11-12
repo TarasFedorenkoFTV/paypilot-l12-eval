@@ -267,10 +267,15 @@ def compare(path_a: str, path_b: str) -> int:
 def _print_row(case: dict, row: dict) -> None:
     v = row["verdict"]
     mark = "SKIP" if row.get("skipped") else ("pass" if v["passed"] else "FAIL")
-    print(f"{mark:<5} {case['_set']:<4} {case['id']:<12} {v['assertion']:<22} {v['detail'][:70]}")
-    if case["additional_metadata"]["assertion"] == "joint":
+    joint = case["additional_metadata"]["assertion"] == "joint"
+    detail = "" if joint and row["checks"] else v["detail"]
+    print(f"{mark:<5} {case['_set']:<4} {case['id']:<12} {v['assertion']:<22} "
+          f"{detail if len(detail) <= 70 else ''}")
+    if len(detail) > 70:
+        print(f"        {detail}")
+    if joint:
         for c in row["checks"]:
-            print(f"        {c['label']:<28} {'pass' if c['passed'] else 'FAIL'}")
+            print(f"        {c['label']:<26} {'pass' if c['passed'] else 'FAIL':<5} {c['detail']}")
 
 
 def dry_run(names, gate, only) -> int:
