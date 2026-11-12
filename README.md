@@ -44,7 +44,7 @@ cd "$HOME\paypilot\l12"
 Copy-Item .env.example .env
 ```
 
-Якщо ваші тести L11 лежать не в `~/paypilot/l11` (наприклад, у репозиторії ДЗ L11), впишіть шлях у `.env`: `L11_DIR=../назва-теки`.
+Кіт очікує поруч теки `paypilot-stand` і `l11`. Якщо вони лежать інакше (наприклад, тести L11 — у репозиторії ДЗ L11), впишіть шляхи в `.env`: `STAND_DIR=../назва-теки-стенду`, `L11_DIR=../назва-теки-l11` — відносно теки кіта або абсолютні (`D:/…`). Junction чи symlink Docker Desktop не монтує. Такий `.env` — налаштування вашого оточення, а не ручний крок контуру.
 
 Стенд має працювати зі справжньою моделлю: у `.env` стенду `LLM_PROVIDER=anthropic` і ваш `ANTHROPIC_API_KEY`. Перевірка: `docker exec paypilot-stand-stand-1 python scripts/doctor.py` → `llm provider [OK] anthropic`.
 
