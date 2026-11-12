@@ -143,8 +143,8 @@ def collect_oracles(stand, case: dict, run: dict) -> dict:
                                          transaction_id = context.transaction_id
                                          (stand.state("disputes")).
     tool_calls() повертає список {"name", "arguments", "result"}; "result" —
-    уже словник. Якщо агент викликав інструмент кілька разів, беріть перший
-    виклик. Якщо не викликав, покладіть None: це теж
+    уже словник. Якщо агент викликав check_dispute_eligibility кілька разів, беріть
+    перший виклик саме цього інструмента (у трейсі є й інші). Якщо не викликав, покладіть None: це теж
     результат, і спільна перевірка має його прочитати."""
     raise NotImplementedError("КРОК 3: collect_oracles() ще не написано")
 

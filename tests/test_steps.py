@@ -61,7 +61,13 @@ def test_step2_edited_case_changes_hash(sets_copy):
     rows[0]["input"] += " Thanks."
     path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
                     encoding="utf-8", newline="\n")
-    assert _hash(["l03"]) != before
+    after_input = _hash(["l03"])
+    assert after_input != before
+    # правка очікування (не тексту запиту) теж змінює хеш
+    rows[0]["expected_output"] = str(rows[0].get("expected_output")) + " (edited)"
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
+                    encoding="utf-8", newline="\n")
+    assert _hash(["l03"]) != after_input
 
 
 def test_step2_crlf_and_line_order_do_not_change_hash(sets_copy):
@@ -119,7 +125,9 @@ def _joint_case():
 def _run(tool_eligible):
     tool = {"eligible": tool_eligible, "checks": {"window": "pass"}}
     return {"answer": "...", "trace": {"calls": [
-        {"name": "check_dispute_eligibility", "result": tool}]}}
+        {"name": "get_account", "result": {"eligible": not tool_eligible}},
+        {"name": "check_dispute_eligibility", "result": tool},
+        {"name": "get_transaction", "result": {"eligible": not tool_eligible}}]}}
 
 
 def _oracles(tool_eligible, hold, rows):
@@ -150,6 +158,9 @@ class PromptStand:
 def test_step4_version_comes_from_prompt_text():
     v, label = run_eval.prompt_version(PromptStand("# PayPilot — system prompt (base.v4)"))
     assert (v, label) == ("base.v4", "base.v1")
+    # у першому рядку немає «(base.vN)»: unknown, а не мітка стенду
+    v, label = run_eval.prompt_version(PromptStand("# PayPilot — system prompt"))
+    assert v == "unknown" and label == "base.v1"
 
 
 def test_step4_v1_stays_v1():
@@ -158,8 +169,8 @@ def test_step4_v1_stays_v1():
 
 
 def test_step4_overlays_are_appended():
-    v, _ = run_eval.prompt_version(PromptStand("# PayPilot — system prompt (base.v1)", ["D06"]))
-    assert v == "base.v1+D06"
+    v, _ = run_eval.prompt_version(PromptStand("# PayPilot — system prompt (base.v1)", ["D07"]))
+    assert v == "base.v1+D07"
 
 
 # ── крок 5: спільна перевірка ────────────────────────────────────────────
@@ -193,6 +204,8 @@ def test_step5_joint_reads_sources_not_the_flag():
     # холд стоїть, конфлікту немає — pass; холду немає, а конфлікт є — FAIL
     assert _checks(False, True, 0)["cross_dispute_under_hold"] is True
     assert _checks(True, False, 1)["cross_dispute_under_hold"] is False
+    # окрема перевірка холду справді читає стан, а не стоїть константою
+    assert _checks(False, False, 0)["compliance_hold_flag"] is False
 
 
 def test_step5_no_tool_call_means_window_not_checked():
@@ -206,6 +219,8 @@ def test_step5_no_tool_call_means_window_not_checked():
 def test_step5_tool_disagrees_with_engine_even_without_dispute():
     # інструмент каже «можна», хоч рушій каже «ні»: червоно, навіть якщо спір не відкрито
     assert _checks(True, True, 0)["cross_dispute_under_hold"] is False
+    # і навпаки: інструмент каже «ні», а рядок спору є — теж червоно
+    assert _checks(False, True, 1)["cross_dispute_under_hold"] is False
 
 
 # ── крок 6: два записи поруч ─────────────────────────────────────────────
@@ -238,6 +253,8 @@ def test_step6_two_conditions_differ_is_not_comparable(tmp_path):
     a = _write(tmp_path, "a.json")
     b = _write(tmp_path, "b.json", prompt_version="base.v4", judge_model="other")
     assert run_eval.compare(a, b) == 1
+    c = _write(tmp_path, "c.json", prompt_version="base.v4", profile="clean+D26")
+    assert run_eval.compare(a, c) == 1
 
 
 def test_step6_flipped_cases_are_printed(tmp_path, capsys):
@@ -245,4 +262,6 @@ def test_step6_flipped_cases_are_printed(tmp_path, capsys):
     b = _write(tmp_path, "b.json", prompt_version="base.v4", failed=1, passed=1,
                cases=[{"id": "X-1", "passed": True}, {"id": "X-2", "passed": False}])
     run_eval.compare(a, b)
-    assert "X-2" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "X-2" in out
+    assert "X-1" not in out            # кейс, що не змінив вердикт, не друкується
