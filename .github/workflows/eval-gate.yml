@@ -71,7 +71,7 @@ jobs:
           GATE_MODE: smoke
           SET: l03
           CASE: DIS-006
-          PROFILE: clean
+          PROFILE: lesson-03
           GATE: daily
         run: |
           docker compose run --rm \
