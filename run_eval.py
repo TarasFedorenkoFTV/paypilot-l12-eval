@@ -70,18 +70,32 @@ def _raw_cases(name: str) -> dict:
 
 
 def set_hash(names: list[str], ids: list[str]) -> str:
-    """КРОК 2. Хеш вмісту кейсів, що пішли в прогін: 12 символів sha256.
+    """Мінімальна реалізація, замініть на вашу"""
+    selected_ids = set(ids)
+    selected_cases = {}
 
-    Вимоги (перевірите на кроці 2):
-      - дописаний або виправлений кейс змінює хеш;
-      - перезбереження файлу без змін, CRLF після клонування на Windows,
-        інший порядок ключів чи рядків у файлі — не змінюють;
-      - інший GATE чи CASE (інший перелік ids) — змінює: хеш описує саме
-        ті кейси, що пішли в прогін, а не файли цілком;
-      - у хеш не потрапляє нічого, крім кейсів: ні час, ні шлях, ні звіт.
-    Підказка: _raw_cases(name) повертає кейси файлу як є; ids — id кейсів
-    після фільтрів GATE і CASE."""
-    raise NotImplementedError("КРОК 2: set_hash() ще не написано")
+    for name in names:
+        for case_id, case in _raw_cases(name).items():
+            if case_id in selected_ids:
+                if case_id in selected_cases:
+                    raise ValueError(f"Duplicate case ID: {case_id}")
+                selected_cases[case_id] = case
+
+    if set(selected_cases) != selected_ids:
+        missing = selected_ids - set(selected_cases)
+        raise ValueError(f"Missing cases: {sorted(missing)}")
+
+    canonical = json.dumps(
+        [selected_cases[k] for k in sorted(selected_cases)],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    return hashlib.sha256(
+        canonical.encode("utf-8")
+    ).hexdigest()[:12]
+
 
 
 
@@ -127,27 +141,62 @@ def _meter(stand):
     stand.chat = metered
 
 
+
 def collect_oracles(stand, case: dict, run: dict) -> dict:
-    """КРОК 3. Ранер збирає для assertion словник результатів оракулів кейса.
+    """Мінімальна реалізація — замініть на власну.
 
-    Assertion потім лише читає цей словник: жодного HTTP усередині перевірки.
-    Для кейса JNT-026 потрібні чотири ключі:
-      "engine:disputes"                — очікуване рушія, записане в кейсі
-                                         (additional_metadata.engine);
-      "tool:check_dispute_eligibility" — результат інструмента з трейсу
-                                         (stand.tool_calls(run["trace"]));
-      "state:customers"                — список рядків customers з
-                                         id = context.customer_id (один рядок)
-                                         (stand.state("customers"));
-      "state:disputes"                 — список рядків disputes з
-                                         transaction_id = context.transaction_id
-                                         (stand.state("disputes")).
-    tool_calls() повертає список {"name", "arguments", "result"}; "result" —
-    уже словник. Якщо агент викликав check_dispute_eligibility кілька разів, беріть
-    перший виклик саме цього інструмента (у трейсі є й інші). Якщо не викликав, покладіть None: це теж
-    результат, і спільна перевірка має його прочитати."""
-    raise NotImplementedError("КРОК 3: collect_oracles() ще не написано")
+    Збирає чотири джерела даних для спільної перевірки JNT-026.
 
+    Args:
+        stand: Клієнт PayPilot із методами tool_calls() та state().
+        case: Тестовий кейс із метаданими та контекстом.
+        run: Результат прогону агента, що містить trace.
+
+    Returns:
+        dict: Словник із чотирма джерелами:
+            - engine:disputes — зафіксоване очікування рушія;
+            - tool:check_dispute_eligibility — результат інструмента;
+            - state:customers — стан вибраного клієнта;
+            - state:disputes — спори за вибраною транзакцією.
+
+    Notes:
+        Використовує перший відповідний виклик інструмента.
+        Якщо виклику немає, повертає None для цього джерела.
+        Очікування рушія читається з кейсу, а не обчислюється повторно.
+    """
+    meta = case["additional_metadata"]
+    context = case["context"]
+
+    customer_id = context["customer_id"]
+    transaction_id = context["transaction_id"]
+
+    engine = meta["engine"]
+
+    tool_result = next(
+        (
+            call["result"]
+            for call in stand.tool_calls(run["trace"])
+            if call["name"] == "check_dispute_eligibility"
+        ),
+        None,
+    )
+
+    customers = [
+        row for row in stand.state("customers")
+        if row["id"] == customer_id
+    ]
+
+    disputes = [
+        row for row in stand.state("disputes")
+        if row["transaction_id"] == transaction_id
+    ]
+
+    return {
+        "engine:disputes": engine,
+        "tool:check_dispute_eligibility": tool_result,
+        "state:customers": customers,
+        "state:disputes": disputes,
+    }
 
 
 def run_case(stand, runner, case: dict) -> dict:
@@ -181,21 +230,80 @@ def _check(name: str, level: int, passed: bool, detail: str) -> dict:
     return {"label": name, "level": level, "passed": bool(passed), "detail": detail}
 
 
-def joint_checks(oracles: dict) -> list[dict]:
-    """КРОК 5. Дві окремі перевірки й одна спільна. Поверніть три рядки
-    _check(назва, рівень, пройдено, пояснення):
-      disputes_window_ok        рівень 1  інструмент каже: вікно спору відкрите
-      compliance_hold_flag      рівень 1  у клієнта стоїть compliance_hold
-      cross_dispute_under_hold  рівень 4  рушій каже «не можна», отже інструмент
-                                          не має казати «можна» І в disputes
-                                          не має бути рядка по транзакції;
-                                          досить будь-якого з двох, щоб FAIL
-    Спільна перевірка читає кілька оракулів одразу; на профілі clean вона
-    зелена, з DEFECTS=D26 — червона, а дві окремі лишаються зеленими.
-    Якщо агент не викликав інструмент (у словнику None), disputes_window_ok —
-    FAIL: вікна ніхто не перевірив."""
-    raise NotImplementedError("КРОК 5: joint_checks() ще не написано")
 
+def joint_checks(oracles: dict) -> list[dict]:
+    """Мінімальна реалізація — замініть на власну.
+
+    Перевіряє три умови для кейса JNT-026:
+    доступність вікна спору, compliance hold та узгодженість
+    рушія, інструмента й фактичного стану disputes.
+
+    Args:
+        oracles: Словник результатів чотирьох джерел,
+            підготовлений функцією collect_oracles().
+
+    Returns:
+        list[dict]: Три результати перевірок із полями
+            label, level, passed і detail.
+
+    Notes:
+        Відсутність виклику інструмента не вважається успіхом.
+        Спільна перевірка виявляє суперечність навіть тоді,
+        коли окремі перевірки проходять.
+        Реалізація призначена для навчального кейса JNT-026.
+    """
+    engine = oracles["engine:disputes"]
+    tool = oracles["tool:check_dispute_eligibility"]
+    customers = oracles["state:customers"]
+    disputes = oracles["state:disputes"]
+
+    # Окрема перевірка: вікно спору відкрите.
+    window_ok = (
+        isinstance(tool, dict)
+        and tool.get("checks", {}).get("window") == "pass"
+    )
+
+    # Окрема перевірка: compliance hold встановлено.
+    hold = any(
+        bool(row.get("compliance_hold"))
+        for row in customers
+    )
+
+    # Спільний інваріант:
+    # якщо рушій забороняє спір, інструмент не повинен
+    # дозволяти його, а запис спору не повинен існувати.
+    engine_denies = engine.get("eligible") is False
+    tool_allows = (
+        isinstance(tool, dict)
+        and tool.get("eligible") is True
+    )
+    dispute_exists = bool(disputes)
+
+    cross_ok = not (
+        engine_denies
+        and (tool_allows or dispute_exists)
+    )
+
+    return [
+        _check(
+            "disputes_window_ok",
+            1,
+            window_ok,
+            "Перевірка вікна спору інструментом",
+        ),
+        _check(
+            "compliance_hold_flag",
+            1,
+            hold,
+            "Compliance hold у стані клієнта",
+        ),
+        _check(
+            "cross_dispute_under_hold",
+            4,
+            cross_ok,
+            "Узгодженість рушія, інструмента та стану disputes",
+        ),
+    ]
 
 
 def assert_case(case: dict, answer: str, oracles: dict):
@@ -210,7 +318,7 @@ def assert_case(case: dict, answer: str, oracles: dict):
 # ─────────────────────────── unit-тести L11 (окремий вхід) ───────────────
 
 def unit_tests(dry: bool) -> dict:
-    root = Path(env("L11_DIR", "/course/l11"))
+    root = Path(env("L11_DIR", "/paypilot-l11-eval1"))
     out = {"l11_dir": str(root)}
     for name in ("manual", "generated"):
         folder = root / "tests" / name
@@ -239,20 +347,42 @@ def _unit_ok(block: dict) -> bool:
 
 # ─────────────────────────── 4. result storage ────────────────────────────
 
+
 def prompt_version(stand) -> tuple[str, str]:
-    """КРОК 4. Повертає (версія для звіту, мітка стенду).
+    """Мінімальна реалізація — замініть на власну.
 
-    Мітку стенд віддає в GET /api/_test/prompt -> "version", але без дефектів
-    вона завжди base.v1: стенд читає файл base.v1.md, хоч би що в нього змонтували.
-    Яка версія діє насправді, видно в першому рядку "text":
-      "# PayPilot — system prompt (base.v4)".
-    Якщо список "overlays" не порожній, допишіть його через «+», як стенд.
-    Якщо в першому рядку немає «(base.vN)», поверніть "unknown", а не мітку:
-    мітка — саме те поле, що бреше. Дефект D26 живе в інструменті, а не в
-    промпті, тому з DEFECTS=D26 overlays порожній і версія лишається base.v1."""
-    p = stand._call("GET", "/api/_test/prompt")
-    return p["version"], p["version"]       # КРОК 4: перша половина — неправда
+    Визначає фактичну версію системного промпту PayPilot.
 
+    Версію читає з першого рядка тексту промпту, а не з поля
+    version, яке може залишатися base.v1 після перемикання файлу.
+
+    Args:
+        stand: Клієнт PayPilot, що підтримує метод _call().
+
+    Returns:
+        tuple[str, str]:
+            - фактична версія промпту з урахуванням overlays;
+            - мітка версії, яку повернув стенд.
+
+    Notes:
+        Якщо перший рядок не містить (base.vN), повертає unknown.
+        Overlays додаються через символ + у порядку відповіді API.
+        Дефекти інструментів без prompt overlay не змінюють версію.
+    """
+    response = stand._call("GET", "/api/_test/prompt")
+
+    label = response["version"]
+    prompt_text = response.get("text", "")
+    first_line = prompt_text.splitlines()[0] if prompt_text else ""
+
+    match = re.search(r"\(base\.v\d+\)", first_line)
+    version = match.group(0)[1:-1] if match else "unknown"
+
+    overlays = response.get("overlays") or []
+    if overlays:
+        version += "+" + "+".join(overlays)
+
+    return version, label
 
 
 def write_record(record: dict) -> Path:
@@ -266,16 +396,78 @@ def write_record(record: dict) -> Path:
 
 # ─────────────────────────── 5. reporting ─────────────────────────────────
 
+
 def compare(path_a: str, path_b: str) -> int:
-    """КРОК 6. Покладіть два записи поруч.
+    """Мінімальна реалізація — замініть на власну.
 
-    Надрукуйте шість полів версії обох записів і позначте, які різні
-    (elapsed — наслідок прогону, не умова). Надрукуйте кейси, що змінили
-    вердикт (поле "cases": id і passed). Код повернення:
-      0 — порівнювані: set_hash однаковий і різниться не більше однієї умови;
-      1 — не порівнювані."""
-    raise NotImplementedError("КРОК 6: compare() ще не написано")
+    Порівнює два JSON-звіти прогонів PayPilot.
 
+    Args:
+        path_a: Шлях до першого JSON-звіту.
+        path_b: Шлях до другого JSON-звіту.
+
+    Returns:
+        int:
+            0 — прогони порівнювані;
+            1 — прогони не порівнювані.
+
+    Notes:
+        Для порівнюваності потрібен однаковий set_hash
+        і не більше однієї відмінної умови.
+        elapsed виводиться, але не впливає на порівнюваність.
+        Друкуються лише кейси зі зміненим вердиктом.
+    """
+    a = json.loads(Path(path_a).read_text(encoding="utf-8"))
+    b = json.loads(Path(path_b).read_text(encoding="utf-8"))
+
+    print("Порівняння прогонів")
+    print("-" * 72)
+
+    for field in VERSION_FIELDS:
+        left = a.get(field)
+        right = b.get(field)
+        marker = "DIFF" if left != right else "SAME"
+        print(f"{field:<18} {str(left):<20} {str(right):<20} {marker}")
+
+    differences = [
+        field
+        for field in CONDITIONS
+        if a.get(field) != b.get(field)
+    ]
+
+    comparable = (
+        a.get("set_hash") is not None
+        and a["set_hash"] == b.get("set_hash")
+        and len(differences) <= 1
+    )
+
+    cases_a = {case["id"]: case["passed"] for case in a.get("cases", [])}
+    cases_b = {case["id"]: case["passed"] for case in b.get("cases", [])}
+
+    print("\nКейси зі зміненим вердиктом:")
+
+    flipped = [
+        case_id
+        for case_id in sorted(cases_a.keys() & cases_b.keys())
+        if cases_a[case_id] != cases_b[case_id]
+    ]
+
+    if flipped:
+        for case_id in flipped:
+            print(
+                f"  {case_id}: "
+                f"{'PASS' if cases_a[case_id] else 'FAIL'} -> "
+                f"{'PASS' if cases_b[case_id] else 'FAIL'}"
+            )
+    else:
+        print("  Немає змін вердиктів")
+
+    print(
+        "\nВисновок:",
+        "COMPARABLE" if comparable else "NOT COMPARABLE",
+    )
+
+    return 0 if comparable else 1
 
 
 # ─────────────────────────── точка входу ──────────────────────────────────
@@ -371,18 +563,29 @@ def main(argv) -> int:
     finally:
         stand.set_defects(None)
     units = unit_tests(dry=False)
+    
     elapsed = round(time.time() - t0, 1)
 
     passed = sum(1 for r in rows if not r.get("skipped") and r["verdict"]["passed"])
     skipped = sum(1 for r in rows if r.get("skipped"))
     failed = len(rows) - passed - skipped
-    code = 0 if failed == 0 and skipped == 0 and _unit_ok(units) else 1
+    gate_mode = env("GATE_MODE", "full")
+
+    if gate_mode not in ("smoke", "full"):
+        raise ValueError(f"Unknown GATE_MODE: {gate_mode}")
+
+    l11_required = gate_mode == "full"
+    l11_ok = _unit_ok(units) if l11_required else True
+
+    code = 0 if failed == 0 and skipped == 0 and l11_ok else 1
     record = {
         "prompt_version": version, "set_hash": h, "profile": profile,
         "judge_model": judge_model, "rubric_version": RUBRIC_VERSION, "elapsed": elapsed,
         "set": ",".join(names), "gate": gate or "all", "case_filter": sorted(only),
         "stand_prompt_label": label,
         "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "gate_mode": gate_mode,
+        "l11_required": l11_required,
         "passed": passed, "failed": failed, "skipped": skipped, "total": len(rows),
         "machine": {"agent_calls": SPENT["agent_calls"],
                     "cost_usd": round(SPENT["cost_usd"], 4)},
