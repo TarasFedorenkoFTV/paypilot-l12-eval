@@ -1,0 +1,100 @@
+
+name: PayPilot Eval Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-gate:
+    name: PayPilot Smoke Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout evaluation framework
+        uses: actions/checkout@v4
+
+      - name: Checkout PayPilot stand
+        uses: actions/checkout@v4
+        with:
+          repository: alex-pancho/paypilot-stand
+          path: paypilot-stand
+
+      - name: Prepare L11 placeholder
+        run: |
+          mkdir -p l11/tests/manual
+          mkdir -p l11/tests/generated
+
+      - name: Start PayPilot with mock
+        env:
+          LLM_PROVIDER: mock
+        run: |
+          docker compose \
+            -f paypilot-stand/docker-compose.yml \
+            --project-directory paypilot-stand \
+            up -d --build stand
+
+      - name: Wait for PayPilot API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent \
+              http://localhost:8000/health > /dev/null; then
+              echo "PayPilot API ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "PayPilot API did not become ready"
+          docker compose \
+            -f paypilot-stand/docker-compose.yml \
+            --project-directory paypilot-stand \
+            logs stand
+          exit 1
+
+      - name: Verify framework unit tests
+        env:
+          STAND_DIR: ./paypilot-stand
+          L11_DIR: ./l11
+        run: |
+          docker compose run --rm \
+            --entrypoint pytest eval tests -q
+
+      - name: Run AI Eval Smoke Gate
+        env:
+          STAND_DIR: ./paypilot-stand
+          L11_DIR: ./l11
+          GATE_MODE: smoke
+          SET: l03
+          CASE: DIS-006
+          PROFILE: lesson-03
+          GATE: daily
+        run: |
+          docker compose run --rm \
+            -e GATE_MODE \
+            -e SET \
+            -e CASE \
+            -e PROFILE \
+            -e GATE \
+            eval
+
+      - name: Upload evaluation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paypilot-eval-reports
+          path: reports/run-*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show stand logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f paypilot-stand/docker-compose.yml \
+            --project-directory paypilot-stand \
+            logs --tail=100 stand
